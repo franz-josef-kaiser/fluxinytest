@@ -11,6 +11,10 @@ var API = {
         SUCCESS : 4
     },
 
+    dummy : {
+        val: 0
+    },
+
     promises : {},
 
     // (A) Return new Promise
@@ -73,41 +77,24 @@ var API = {
         // A (zB Swipe)
     },
 
-    'likes.get' : function( val, incrementor ) {
-
-        var promise = new Promise( function( resolve, reject ) {
+    'likes.get' : function( payload ) {
+        var dummy = this.dummy;
+        return new Promise( function( resolve, reject ) {
             window.setTimeout( function() {
-                var result = val + incrementor;
+                var result = dummy.val += payload.incrementor;
                 resolve( result );
             }, 1000 );
         } );
-        if ( 'undefined' === typeof this.promises['likes.get'] ) {
-            this.promises['likes.get'] = promise;
-        }
-        return promise;
-    },
-
-    'foobar' : function( id ) {
-        console.info('foobar');
-        var promise = new Promise( function( resolve, reject ) {
-            window.setTimeout( function() {
-                resolve( "evil" );
-            }, 0 );
-        } );
-        return promise;
     }
 };
 
 var ApiStore = {
     promises : {},
-    data: {
-        val: 0
-    },
     actions : {
-        updateLikes : flux.createAction('update.likes')
+        updateLikes : flux.createAction( 'update.likes' ),
+        updateCounts : flux.createAction( 'update.counts' )
     },
     update : function( action, change ) {
-        var data = this.data;
         var actions = this.actions;
 
         switch ( action.type ) {
@@ -116,54 +103,67 @@ var ApiStore = {
                 //if ( promise && promise.isPending() ) {
                   //  return promise;
                 //}
-                API[ action.type ]( data.val, action.payload.incrementor )
+                API[ action.type ]( action.payload )
                     .then( function ( result ) {
-                        data.val = result;
-                        actions.updateLikes(result);
-                        change();
-                    } );
+                        actions.updateLikes( result );
+                        actions.updateCounts( result );
+                    } ).then( change );
                 break;
         }
     }
 };
 
-var ApiSubscriber = flux.createSubscriber(ApiStore);
-ApiSubscriber(function(store) { console.info('you know nothing', store); });
-
-
 var LikeStore = {
-    data : {
-        val : 0
-    },
+    data : 0,
     update : function( action, change ) {
         switch ( action.type ) {
             case 'update.likes' :
-                this.data.val = action.payload;
+                this.data = action.payload;
                 break;
         }
-        change()
+        change();
     },
     get : function () {
-        return this.data.val;
+        return this.data;
     }
 };
 
 var CounterStore = {
-    data : {
-        val : 0
-    },
+    data : 0,
     update : function( action, change ) {
         switch ( action.type ) {
-            case 'update.likes' :
-                this.data.val = action.payload / 2;
+            case 'update.counts' :
+                this.data = action.payload / 2;
                 break;
         }
-        change()
+        change();
     },
     get : function () {
-        return this.data.val;
+        return this.data;
     }
 };
+Object.defineProperty( CounterStore, 'data', {
+    get : function() {
+        return data;
+    },
+    // Immutable by the outside world
+    set : function(args) {
+        if ( args.length < 1 ) {
+            data = args;
+        }
+    },
+    configurable : true
+} );
+
+// ------- META
+
+flux.createSubscriber( ApiStore )( function( store ) {
+    console.info( store );
+} );
+
+// ------- VIEW
+
+var increase   = flux.createAction('likes.get');
 
 var CounterView = function(subscriber, increase) {
     document.querySelector('svg').addEventListener('click', function(event) {
@@ -175,7 +175,10 @@ var CounterView = function(subscriber, increase) {
         document.querySelector('#counter').textContent = store.get();
     } );
 };
+var CounterSubscriber = flux.createSubscriber(CounterStore);
+CounterView(CounterSubscriber, increase);
 
+var foobar = flux.createAction('foobar');
 var MirrowView = function(subscriber, increase, foobar) {
     document.querySelector('button').addEventListener('click', function(event) {
         event.preventDefault();
@@ -184,14 +187,13 @@ var MirrowView = function(subscriber, increase, foobar) {
     });
 
     subscriber(function(store) {
-        document.querySelector('#mirror').textContent = store.get();
+        var data = store.get();
+        console.info('BEFORE', data);
+        data = ['asdf'];
+        console.info('AFTER', data);
+        // @TODO Prepare data for Mustache Template
+        document.querySelector('#mirror').textContent = data;
     } );
 };
-
-var Likesubscriber    = flux.createSubscriber(LikeStore);
-var Countersubscriber = flux.createSubscriber(CounterStore);
-var increase   = flux.createAction('likes.get');
-var foobar     = flux.createAction('foobar');
-
-CounterView(Likesubscriber, increase);
-MirrowView(Countersubscriber, increase, foobar);
+var LikeSubscriber = flux.createSubscriber(LikeStore);
+MirrowView(LikeSubscriber, increase, foobar);
