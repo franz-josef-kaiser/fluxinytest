@@ -1,7 +1,0 @@
-{
-  "question": "Where do you use JavaScript?",
-  "type": "many-of-many",
-  "options": [
-    "At work", "For side projects", "Other"
-  ]
-}
